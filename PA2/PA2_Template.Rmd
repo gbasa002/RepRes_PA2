@@ -1,0 +1,174 @@
+---
+output:
+  html_document: default
+---
+Analysis of Storm Data and Its Effects on Population Health
+===========================================================
+##Synopsis
+
+The following analysis is done to analyze the **Storm Data** in order to see the effects of different incidents on the population health and economics. The first part of analysis is dealing with reading data and processing it. It is followed by the results. Results section is divided into two subsections. First section is presenting the analyis of events that are harmful to the population health while second section is presenting the analysis of events that are harmful to the economy. 
+
+##Data Processing
+In order to read the storm data from compressed bz2 file, following code chunk is used.
+
+```{r Data Processing, echo=TRUE, comment=NA, warning=FALSE, cache=TRUE, message=FALSE}
+        con <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+```
+In order to tailor the data for the variables we need, following code chunk is used.
+
+```{r Tailor data, echo = TRUE, comment = NA, warning = FALSE, message=FALSE}
+        con_short <- con[, c("STATE__", "EVTYPE", "STATE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", 
+                             "CROPDMGEXP","WFO")]
+        names (con_short) <- c("StateNumber", "EventType", "State", "Fatalities", "Injuries", "PropertyDamage", "PD_Exp",
+                               "CropDamage","CD_Exp", "FloodDamage")
+```
+##Results
+### Question - 1:
+####Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+This part can be divided into two as **Fatal Results of Event Types** and **Nonfatal Results of Event Types**. 
+
+For the calculation of total fatalities across all states in each type of event, following code chunk is used. In order to be able to use **mutate()**, **dplyr** library should be included in the code.
+
+```{r Fatal to Population Health, echo = TRUE, comment = NA, warning = FALSE, message=FALSE}
+        library (dplyr)     
+        con_short$Fatalities <- as.numeric (as.character (con_short$Fatalities))
+        fatal_evtypes <- data.frame(tapply(con_short$Fatalities, con_short$EventType, sum))
+        fatal_evtypes <- mutate (fatal_evtypes, EventType = row.names(fatal_evtypes))
+        names (fatal_evtypes) <- c ("Fatalities", "EventType")
+        fatal_evtypes$EventType <- as.factor (fatal_evtypes$EventType)
+        fatal_evtypes_sorted <- fatal_evtypes[order (-fatal_evtypes$Fatalities),]      
+```
+
+For the calculation of total injuries as non-fatal results of the event types, similar approach with same code chunk is used.
+
+```{r NonFatal to Population Health, echo = TRUE, comment = NA, warning = FALSE, message=FALSE}    
+        con_short$Injuries <- as.numeric (as.character (con_short$Injuries))
+        nonfatal_evtypes <- data.frame(tapply(con_short$Injuries, con_short$EventType, sum))
+        nonfatal_evtypes <- mutate (nonfatal_evtypes, EventType = row.names(nonfatal_evtypes))
+        names (nonfatal_evtypes) <- c ("Injuries", "EventType")
+        nonfatal_evtypes_sorted <- nonfatal_evtypes[order (-nonfatal_evtypes$Injuries),]      
+```
+
+Now, we can make a barchart for fatal and nonfatal consequences of the events. In order to be specific, we can use the top five reasons in each category. **ggplot()** function is used to plot the bar charts. Later, in order to attach both plots as a panel plot, **pushViewport** and **print** functions from **grid** library are used. If the attached libraries in the following code chunk are not installed in your working environment, please install and include them by using **install.packages** and **library** functions. 
+
+```{r Barplots, echo=TRUE, comment=NA, warning=FALSE, message=FALSE, fig.height=6, fig.width=12}
+        library (ggplot2)       
+        fatal_evtypes_plot <- fatal_evtypes_sorted [1:5, ]
+        fatal_evtypes_plot$EventType <- factor (1:5, labels = fatal_evtypes_plot$EventType)
+        my_fatal_plot <- ggplot (fatal_evtypes_plot, aes (EventType, Fatalities, ymax=max(Fatalities)*1.1)) 
+        my_fatal_plot <- my_fatal_plot + geom_bar(stat = "identity", col = "pink", fill = "pink")
+        my_fatal_plot <- my_fatal_plot + ylab ("Fatalities") + xlab ("Event Type")
+        my_fatal_plot <- my_fatal_plot + coord_flip()+geom_text(aes(label=Fatalities), position="identity",vjust=-0.25,hjust=0)
+        my_fatal_plot <- my_fatal_plot + ggtitle ("Five Most Fatal Event Types in US Across States")
+        my_fatal_plot <- my_fatal_plot + theme(plot.title=element_text(family="Times", size=15)) 
+
+        nonfatal_evtypes_plot <- nonfatal_evtypes_sorted [1:5, ]
+        nonfatal_evtypes_plot$EventType <- factor (1:5, labels = nonfatal_evtypes_plot$EventType)
+        my_nonfatal_plot <- ggplot (nonfatal_evtypes_plot, aes (EventType, Injuries, ymax=max(Injuries)*1.1)) 
+        my_nonfatal_plot <- my_nonfatal_plot + geom_bar(stat ="identity", col = "pink", fill = "pink")
+        my_nonfatal_plot <- my_nonfatal_plot + ylab ("Injuries") +xlab("")
+        my_nonfatal_plot <- my_nonfatal_plot + coord_flip()+geom_text(aes(label=Injuries),position="identity",vjust=-0.25,hjust=0)
+        my_nonfatal_plot <- my_nonfatal_plot + ggtitle ("Five Most Injury Event Types in US Across States") 
+        my_nonfatal_plot <- my_nonfatal_plot + theme(plot.title=element_text(family="Times", size=15)) 
+
+        library(grid)
+        library(gridExtra)
+        grid.arrange(my_fatal_plot, my_nonfatal_plot, ncol = 2, main =textGrob("Health Consequences by Event Types Across US",
+                                                                               gp=gpar (fontsize=20, fontface=2)))
+        
+```
+
+As it can be seen from the plots above, most fatal events are ordered as Tornado, Excessive Heat, Flash Flood, Heat and Lightning in descending manner. For the events that cause injuries the most, the list becomes Tornado, TSTM Wind, Flood, Excessive Heat and Lightning in descending order.
+
+Since **Tornado** cause the most injuries and fatalities, it can be said that it is the most harmful event across all states in the US. 
+
+### Question - 2:
+####Across the United States, which types of events have the greatest economic consequences?
+The solution to this question can be reproduced with the help of the analysis in the first question. Now, instead of checking fatalities and injuries, property damage, and crop damage. For property damage, dataframe named **meaningful** is created by subsetting data over **PD_Exp** variable. For PD_Exp:
+        * K: thousands
+        * H, h: hundred thousands
+        * M: millions
+        * B: billions
+For meaningful data, in order to calculate the total property damage, new columns **total_PD** and **PD_Exp_Num** are created to represent the value of letters above and the multiplication or property numbers and the value. 
+
+```{r Property Damage, echo=TRUE, comment=NA, warning=FALSE, message=FALSE}
+        meaningful <- con_short[(as.character(con_short$PD_Exp) == "H" | as.character(con_short$PD_Exp) == "K" |
+                                         as.character(con_short$PD_Exp) == "h"| as.character(con_short$PD_Exp) == "B" |
+                                         as.character(con_short$PD_Exp) == "M"| as.character(con_short$PD_Exp) == "m"), ]
+        meaningful$PD_Exp <- as.character (meaningful$PD_Exp)       
+        meaningful <- mutate(meaningful, PD_Exp_Num = ifelse (meaningful$PD_Exp == "K", 1000, 
+                                                              ifelse (meaningful$PD_Exp == "M" | meaningful$PD_Exp == "m",1000000,
+                                                                      ifelse (meaningful$PD_Exp == "H" | meaningful$PD_Exp == "h",
+                                                                              100000, 1000000000))))
+        meaningful <- mutate (meaningful, total_PD = PD_Exp_Num * PropertyDamage)
+```
+
+Same procedure above is applied to crop damage calculation in a different subset of data, named **meaningful_cd**. Code chunk used is as follows: 
+
+```{r Crop Damage, echo=TRUE, comment=NA, warning=FALSE, message=FALSE}
+        meaningful_cd <- con_short[(as.character(con_short$CD_Exp) == "K" | as.character(con_short$CD_Exp) == "k"| 
+                                        as.character(con_short$CD_Exp) == "B" | as.character(con_short$CD_Exp) == "M"|
+                                            as.character(con_short$CD_Exp) == "m"), ]
+        meaningful_cd$CD_Exp <- as.character (meaningful_cd$CD_Exp)       
+        meaningful_cd <- mutate(meaningful_cd, CD_Exp_Num = ifelse (meaningful_cd$CD_Exp == "K" | meaningful_cd$CD_Exp == "k",1000,
+                                                                    ifelse (meaningful_cd$CD_Exp=="M"|meaningful_cd$CD_Exp == "m",
+                                                                            1000000,1000000000)))
+        meaningful_cd <- mutate (meaningful_cd, total_CD = CD_Exp_Num * CropDamage)
+```
+
+Now, we can calculate the total property and crop damage across all states in US stemming from different events to see the economic consequences of each event. For property damage, following code chunk is written.  
+
+```{r Economic Consequence Property Damage, echo = TRUE, comment = NA, warning = FALSE, message=FALSE}
+        property_damage <- data.frame (tapply (meaningful$total_PD, meaningful$EventType, sum))
+        property_damage <- na.omit (property_damage)
+        property_damage <- mutate (property_damage, EventType = row.names (property_damage))
+        names (property_damage) <- c ("Property_Damage", "EventType")
+        property_damage$EventType <- as.factor (property_damage$EventType)
+        property_damage_sorted <- property_damage[order (-property_damage$Property_Damage),] 
+        PD_Top_5 <- property_damage_sorted [1:5,]
+        PD_Top_5$EventType <- factor (1:5, labels = PD_Top_5$EventType)
+```
+
+For the calculation of crop damage, an approach similar to the one above that is used for property damage is applied. 
+
+```{r Economic Consequence Crop Damage, echo = TRUE, comment = NA, warning = FALSE, message=FALSE}
+        crop_damage <- data.frame (tapply (meaningful_cd$total_CD, meaningful_cd$EventType, sum))
+        crop_damage <- na.omit (crop_damage)
+        crop_damage <- mutate (crop_damage, EventType = row.names (crop_damage))
+        names (crop_damage) <- c ("Crop_Damage", "EventType")
+        crop_damage$EventType <- as.factor (crop_damage$EventType)
+        crop_damage_sorted <- crop_damage[order (-crop_damage$Crop_Damage),] 
+        CD_Top_5 <- crop_damage_sorted [1:5,]
+        CD_Top_5$EventType <- factor (1:5, labels = CD_Top_5$EventType)
+```
+
+Now, in order to visualize the economic effects of events on property and crops, we can make two barplots as a panel plot. The following code chunk is used to create what we need to visualize. On the graphs, in order to have the labels in scientific format, **scientific()** function from the **scales** library is used. If this library is not installed on the working environment, please do so by using **install.packages()** function. 
+
+```{r Barplots of Economics, echo=TRUE, comment=NA, warning=FALSE, message=FALSE, fig.height=8, fig.width=16}       
+        library (scales)
+        prop_damage_plot <- ggplot (PD_Top_5, aes (EventType, Property_Damage, ymax=max(Property_Damage)*1.1)) 
+        prop_damage_plot <- prop_damage_plot + geom_bar(stat = "identity", col = "pink", fill = "pink")
+        prop_damage_plot <- prop_damage_plot + ylab ("") +xlab ("")
+        prop_damage_plot <- prop_damage_plot + geom_text(aes(label=scientific(Property_Damage, digits = 3)), 
+                                                         position="identity",vjust=0.25,hjust=0.5,col = "black")
+        prop_damage_plot <- prop_damage_plot + ggtitle ("Top Five Events with Highest Property Damage in US Across States") 
+        prop_damage_plot <- prop_damage_plot + theme(plot.title=element_text(family="Times", size=15))     
+
+        crop_damage_plot <- ggplot (CD_Top_5, aes (EventType, Crop_Damage, ymax=max(Crop_Damage)*1.1)) 
+        crop_damage_plot <- crop_damage_plot + geom_bar(stat ="identity", col = "pink", fill = "pink")
+        crop_damage_plot <- crop_damage_plot + ylab ("") + xlab ("")
+        crop_damage_plot <- crop_damage_plot + geom_text(aes(label=scientific(Crop_Damage, digits = 3)),
+                                                          position="identity",vjust=0.25,hjust=0.5, col="black")
+        crop_damage_plot <- crop_damage_plot + ggtitle ("Top Five Events with Highest Crop Damage in US Across States") 
+        crop_damage_plot <- crop_damage_plot + theme(plot.title=element_text(family="Times", size=15))        
+        
+        grid.arrange(prop_damage_plot, crop_damage_plot, ncol = 2, 
+                     main = textGrob("Economic Consequences by Event Types Across US", gp=gpar(fontsize=20, fontface=2)), 
+                     sub=textGrob("Event", gp=gpar(font=2, fontsize=15)), left = textGrob("Damage", gp=gpar(font=2, fontsize=15)))
+```
+
+As it can be seen from the graphds above, flood is the most dangerous to properties across all states in US, while drought affects the crops the most. Flood comes second in crop damage. It can be concluded as overall, flood is the most influential on economic consequences as an event across all states in US. 
+
+##Remarks
+This analysis is authored by Gulsevi Basar for Reproducible Research Course and submitted on March 18th, 2015. 
